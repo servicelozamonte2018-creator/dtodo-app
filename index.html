@@ -49,6 +49,8 @@ a.btn{color:#fff}.btn:active{transform:scale(.98)}.btn:disabled{opacity:.5}
 .btn.ghost{background:var(--glass);box-shadow:none;border:1px solid var(--line)}
 .msg{margin-top:14px;font-size:13px;line-height:1.5;padding:12px 14px;border-radius:12px;background:var(--glass);color:#D9C8EE;border:1px solid var(--line)}
 .msg.err{background:rgba(255,92,122,.1);border-color:rgba(255,92,122,.35);color:#FFC7D2}
+.eye{position:absolute;right:8px;top:50%;transform:translateY(-50%);border:0;background:none;font-size:18px;cursor:pointer;opacity:.7}
+.link{display:block;width:100%;background:none;border:0;color:var(--muted);font-size:13px;margin-top:16px;cursor:pointer;line-height:1.5}.link b{color:#E2CCFF}
 .label{font-size:11px;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);font-weight:700;margin:18px 4px 8px}
 /* ---------- APP ---------- */
 .app{max-width:720px;margin:auto;padding:calc(14px + var(--safe-t)) 16px calc(100px + var(--safe-b))}
@@ -236,16 +238,30 @@ details.day[open] summary:after{transform:rotate(90deg)}
 <section id="login" class="login hidden">
   <div class="orb"><img src="icon-192.png" alt="DTODO"></div>
   <h1>DTODO BUSINESS</h1>
-  <p class="sub">Ingresa con tu Gmail autorizado.<br>Te enviaremos un código de un solo uso.</p>
-  <div id="step-email">
-    <input id="email" class="input" type="email" inputmode="email" autocomplete="email" placeholder="tu.correo@gmail.com">
-    <button id="send" class="btn">Enviar código</button>
+  <p class="sub" id="login-sub">Entra con tu Gmail y tu contraseña de DTODO.</p>
+  <form id="step-pass" autocomplete="on" onsubmit="event.preventDefault();loginPass();">
+    <input id="email" name="username" class="input" type="email" inputmode="email" autocomplete="username" placeholder="tu.correo@gmail.com">
+    <div style="position:relative;margin-top:10px"><input id="password" name="password" class="input" type="password" autocomplete="current-password" placeholder="Contraseña de DTODO"><button type="button" class="eye" onclick="togglePw('password',this)">👁</button></div>
+    <button id="login-btn" class="btn" type="submit">Entrar</button>
+    <button type="button" class="link" onclick="showCodeStep()">¿Primera vez u olvidaste tu contraseña? <b>Entrar con código</b></button>
+  </form>
+  <div id="step-email" class="hidden">
+    <input id="email2" class="input" type="email" inputmode="email" autocomplete="email" placeholder="tu.correo@gmail.com">
+    <button id="send" class="btn">Enviar código a mi Gmail</button>
+    <button type="button" class="link" onclick="showLogin()">← Volver a entrar con contraseña</button>
   </div>
   <div id="step-code" class="hidden">
     <input id="code" class="input code-input" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="••••••">
-    <button id="verify" class="btn">Verificar y entrar</button>
+    <button id="verify" class="btn">Verificar</button>
     <button id="back" class="btn ghost">Usar otro correo</button>
   </div>
+  <form id="step-newpass" class="hidden" autocomplete="on" onsubmit="event.preventDefault();savePass();">
+    <input id="np-user" name="username" type="email" autocomplete="username" style="display:none">
+    <div style="position:relative"><input id="np1" class="input" type="password" autocomplete="new-password" placeholder="Nueva contraseña (mín. 6)"><button type="button" class="eye" onclick="togglePw('np1',this)">👁</button></div>
+    <input id="np2" class="input" type="password" autocomplete="new-password" placeholder="Repite la contraseña" style="margin-top:10px">
+    <button id="np-btn" class="btn" type="submit">Guardar y entrar</button>
+    <p class="note" style="text-align:center">Es una contraseña solo para DTODO. <b>No uses la de tu Gmail.</b> Tu celular te ofrecerá guardarla.</p>
+  </form>
   <div id="login-msg" class="msg hidden"></div>
 </section>
 
@@ -294,8 +310,11 @@ details.day[open] summary:after{transform:rotate(90deg)}
     <button class="btn" id="demo-sale" style="margin:0 0 10px" onclick="DEMO_BOOST+=70;closeSheet();view='home';load();">🛒 Simular venta de S/ 70 (ver celebración)</button>
     <div style="display:flex;gap:8px"><button class="btn ghost" style="margin:0" onclick="setDemoRole('ADMIN')">Admin</button><button class="btn ghost" style="margin:0" onclick="setDemoRole('ASESOR')">Asesor</button><button class="btn ghost" style="margin:0" onclick="setDemoRole('COBRANZAS')">Cobranzas</button></div></div>
   <a id="att-link" class="btn" href="#" target="_blank" rel="noopener">Abrir asistencia</a>
+  <button class="btn ghost" onclick="showChangePass()">🔑 Cambiar mi contraseña</button>
+  <div id="admin-reset" class="hidden"><div class="label">ADMIN · resetear contraseña de alguien</div>
+    <div style="display:flex;gap:8px"><input id="reset-email" class="input" style="height:48px;font-size:15px" type="email" placeholder="correo@gmail.com"><button class="btn ghost" style="margin:0;width:auto;padding:0 16px;height:48px" onclick="adminReset()">Resetear</button></div></div>
   <button class="btn ghost" id="logout">Cerrar sesión</button>
-  <p class="note" style="text-align:center">Versión 1.3 · Solo lectura · Los datos vienen en vivo de la hoja maestra</p>
+  <p class="note" style="text-align:center">Versión 1.4 · Los datos vienen en vivo de la hoja maestra</p>
 </div>
 
 <script>
@@ -339,26 +358,57 @@ async function api(action, payload){
 
 /* ===================== LOGIN ===================== */
 function loginMsg(t, err){ const el=$('login-msg'); el.textContent=t; el.className='msg'+(err?' err':''); }
-async function sendCode(){
-  const email=$('email').value.trim(); if(!email){loginMsg('Escribe tu Gmail.',1);return;}
-  lastEmail=email; $('send').disabled=true; $('send').textContent='Enviando…';
-  try{ const r=await api('requestCode',{email}); $('step-email').classList.add('hidden'); $('step-code').classList.remove('hidden'); loginMsg(r.message||'Revisa tu Gmail.'); setTimeout(()=>$('code').focus(),100); }
+let pendingLogin=null, pwFlow='first';
+function togglePw(id,b){ const i=$(id); i.type=i.type==='password'?'text':'password'; b.style.opacity=i.type==='text'?1:.7; }
+function loginSteps(show){ ['step-pass','step-email','step-code','step-newpass'].forEach(i=>$(i).classList.toggle('hidden',i!==show)); }
+function showCodeStep(){ loginSteps('step-email'); $('email2').value=$('email').value; $('login-sub').innerHTML='Te enviaremos un código a tu Gmail.<br>Luego crearás tu contraseña de DTODO.'; $('login-msg').className='msg hidden'; }
+async function loginPass(){
+  const email=$('email').value.trim(), password=$('password').value;
+  if(!email||!password){ loginMsg('Escribe tu Gmail y tu contraseña.',1); return; }
+  $('login-btn').disabled=true; $('login-btn').textContent='Entrando…';
+  try{ const r=await api('loginPassword',{email,password}); finishLogin(r); }
   catch(e){ loginMsg(e.message,1); }
-  finally{ $('send').disabled=false; $('send').textContent='Enviar código'; }
+  finally{ $('login-btn').disabled=false; $('login-btn').textContent='Entrar'; }
+}
+function finishLogin(r){
+  token=r.token; store.set(TOKEN_KEY,token); userName=r.name||''; store.set('DTAPP_NAME',userName); store.set('DTAPP_ROLE',r.role);
+  $('login-msg').className='msg hidden';
+  if(r.role==='COBRANZAS'){ showOnlyAttendance(r); return; }
+  attOnly=false; view=r.role==='ASESOR'?'att':'home'; showApp(); load();
+}
+async function savePass(){
+  const a=$('np1').value, b=$('np2').value;
+  if(a.length<6){ loginMsg('La contraseña debe tener al menos 6 caracteres.',1); return; }
+  if(a!==b){ loginMsg('Las contraseñas no coinciden.',1); return; }
+  $('np-btn').disabled=true; $('np-btn').textContent='Guardando…';
+  try{ await api('setPassword',{token:(pendingLogin&&pendingLogin.token)||token,password:a});
+    if(pendingLogin){ const r=pendingLogin; pendingLogin=null; toast('✓ Contraseña guardada'); finishLogin(r); }
+    else { toast('✓ Contraseña cambiada'); showApp(); render(); }
+  }catch(e){ loginMsg(e.message,1); }
+  finally{ $('np-btn').disabled=false; $('np-btn').textContent='Guardar y entrar'; }
+}
+function showChangePass(){ closeSheet(); pendingLogin=null; ['app','nav','only-att'].forEach(i=>$(i).classList.add('hidden')); $('login').classList.remove('hidden'); loginSteps('step-newpass'); $('np-user').value=''; $('np1').value=''; $('np2').value=''; $('login-sub').textContent='Escribe tu nueva contraseña de DTODO.'; $('login-msg').className='msg hidden'; $('np-btn').textContent='Guardar'; }
+async function adminReset(){ const em=$('reset-email').value.trim(); if(!em) return; try{ const r=await api('adminResetPassword',{token,email:em}); toast('✓ '+r.message); $('reset-email').value=''; }catch(e){ toast('⚠ '+e.message); } }
+async function sendCode(){
+  const email=$('email2').value.trim(); if(!email){loginMsg('Escribe tu Gmail.',1);return;}
+  lastEmail=email; $('send').disabled=true; $('send').textContent='Enviando…';
+  try{ const r=await api('requestCode',{email}); loginSteps('step-code'); loginMsg(r.message||'Revisa tu Gmail.'); setTimeout(()=>$('code').focus(),100); }
+  catch(e){ loginMsg(e.message,1); }
+  finally{ $('send').disabled=false; $('send').textContent='Enviar código a mi Gmail'; }
 }
 async function verifyCode(){
   const code=$('code').value.replace(/\D/g,''); if(code.length!==6){loginMsg('Escribe los 6 dígitos.',1);return;}
   $('verify').disabled=true; $('verify').textContent='Verificando…';
   try{
     const r=await api('verifyCode',{email:lastEmail,code});
-    token=r.token; store.set(TOKEN_KEY,token); userName=r.name||''; store.set('DTAPP_NAME',userName); store.set('DTAPP_ROLE',r.role);
-    if(r.role==='COBRANZAS'){ showOnlyAttendance(r); return; }
-    attOnly=false;
-    showApp(); load();
+    pendingLogin=r; $('np-user').value=lastEmail; $('email').value=lastEmail;
+    loginSteps('step-newpass'); $('np-btn').textContent='Guardar y entrar';
+    $('login-sub').innerHTML=r.hasPassword?'Crea una <b>nueva</b> contraseña de DTODO.':'¡Listo! Ahora crea tu <b>contraseña de DTODO</b>.<br>La usarás para entrar desde ahora.';
+    $('login-msg').className='msg hidden'; setTimeout(()=>$('np1').focus(),100);
   }catch(e){ loginMsg(e.message,1); }
   finally{ $('verify').disabled=false; $('verify').textContent='Verificar y entrar'; }
 }
-function showLogin(){ ['app','nav','only-att'].forEach(i=>$(i).classList.add('hidden')); $('login').classList.remove('hidden'); $('step-email').classList.remove('hidden'); $('step-code').classList.add('hidden'); $('code').value=''; $('login-msg').className='msg hidden'; }
+function showLogin(){ document.querySelectorAll('.celebrate').forEach(e=>e.remove()); ['app','nav','only-att'].forEach(i=>$(i).classList.add('hidden')); $('login').classList.remove('hidden'); loginSteps('step-pass'); $('code').value=''; $('password').value=''; $('login-sub').textContent='Entra con tu Gmail y tu contraseña de DTODO.'; $('login-msg').className='msg hidden'; }
 function showApp(){ $('login').classList.add('hidden'); $('only-att').classList.add('hidden'); $('app').classList.remove('hidden'); $('nav').classList.remove('hidden'); if(!DATA) renderSkeleton(); }
 function showOnlyAttendance(r){ attOnly=true; store.set('DTAPP_ROLE','COBRANZAS'); if(r&&r.name){userName=r.name;store.set('DTAPP_NAME',userName);} if(view!=='att') view='cob'; showApp(); applyRoleUI(); render(); view==='att'?loadAtt():loadCob(); }
 function curRole(){ return attOnly?'COBRANZAS':(DATA?DATA.role:(store.get('DTAPP_ROLE')||'')); }
@@ -397,7 +447,7 @@ async function loadCob(){
 async function loadAtt(){
   if(!token||attBusy) return; attBusy=true; $('refresh').classList.add('spin');
   const month=($('date').value||todayKey()).slice(0,7);
-  try{ ATT[month]=await api('getAttendance',{token,month}); $('err').classList.add('hidden'); render(); }
+  try{ const t0=Date.now(); ATT[month]=await api('getAttendance',{token,month}); serverOffset=(ATT[month].serverTimestamp||Date.now())-Math.round((t0+Date.now())/2); $('err').classList.add('hidden'); render(); }
   catch(e){ const m=e.message||String(e); if(/sesión|venció|desactivado|cambió/i.test(m)){ token=''; store.del(TOKEN_KEY); showLogin(); loginMsg(m,1); } else { $('err').textContent=m; $('err').classList.remove('hidden'); } }
   finally{ attBusy=false; if(!busy) $('refresh').classList.remove('spin'); }
 }
@@ -533,36 +583,49 @@ function renderAttView(){
   $('views').innerHTML='<div class="view">'+(a?viewAtt(a):'<div class="card skel" style="height:200px;margin-top:14px"></div>')+'</div>';
   requestAnimationFrame(()=>document.querySelectorAll('[data-w]').forEach(el=>el.style.width=el.dataset.w));
 }
-function markCard(r){
-  if(!r) return '';
-  const g=demoMark.gps, inS=demoMark.in, outS=demoMark.out;
-  const ring=g==='searching'?`<div class="gps search"><i></i><i></i><i></i><b>📡</b></div><div class="gpstxt">Buscando señal GPS…</div>`
-    : g==='ok'?`<div class="gps ok"><b>✓</b></div><div class="gpstxt" style="color:var(--green)">Dentro de la ${r.mode==='CASA'?'zona CASA':'oficina'} · a 8 m<br><small>Precisión GPS 12 m (máx. 30 m)</small></div>`
-    : `<div class="gps"><b>📍</b></div><div class="gpstxt">Ubicación sin verificar</div>`;
-  let btn;
-  if(!inS) btn=`<button class="btn" onclick="demoDoMark('in')" ${g==='searching'?'disabled':''}>${g==='searching'?'Verificando ubicación…':'Marcar ENTRADA'}</button>`;
-  else if(!outS) btn=`<button class="btn ghost" disabled>Marcar SALIDA · se habilita a las ${hm(r.scheduledOut)}</button><button class="btn ghost" style="height:40px;font-size:13px" onclick="demoDoMark('out')">(demo) simular hora de salida</button>`;
-  else btn=`<button class="btn ghost" disabled>✓ Jornada completa</button>`;
+function deviceId(){ let d=store.get('DTAPP_DEVICE'); if(!/^[A-Za-z0-9_-]{20,100}$/.test(d||'')){ const c='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'; d='app_'; const r=new Uint32Array(32); (window.crypto||{getRandomValues:x=>x.map(()=>Math.random()*1e9)}).getRandomValues(r); r.forEach(n=>d+=c[n%62]); store.set('DTAPP_DEVICE',d);} return d; }
+let markState={busy:false,msg:'',err:''}, serverOffset=0, r_out='';
+const limaNow=()=>new Date(Date.now()+serverOffset);
+const limaClock=()=>limaNow().toLocaleTimeString('es-PE',{timeZone:'America/Lima',hour12:false});
+const limaMinutes=()=>{ const t=limaClock().split(':').map(Number); return t[0]*60+t[1]; };
+const toMin=t=>{ const p=String(t||'').split(':').map(Number); return p[0]*60+(p[1]||0); };
+function markCard(r, a){
+  if(!a.canMarkInApp) return '';
+  if(!r) return `<section class="card mark"><div class="k">Hoy</div><div class="gpstxt" style="margin:12px 0">No tienes turno programado hoy.</div></section>`;
+  let body, action='';
+  const exitOpen=limaMinutes()>=toMin(r.scheduledOut);
+  if(markState.busy){ body=`<div class="gps search"><i></i><i></i><i></i><b>📡</b></div><div class="gpstxt">${esc(markState.msg||'Verificando ubicación…')}</div>`; }
+  else if(!r.actualIn){ action='ENTRADA'; body=`<div class="gps"><b>📍</b></div><div class="gpstxt">Listo para marcar tu entrada</div>`; }
+  else if(!r.actualOut && !exitOpen){ body=`<div class="gps ok"><b>✓</b></div><div class="gpstxt" style="color:var(--green)">En jornada desde las ${hm(r.actualIn)}${r.lateMinutes?` <span style="color:var(--amber)">(+${r.lateMinutes} min)</span>`:''}</div><div class="note" style="margin-top:6px">Tu salida es a las ${hm(r.scheduledOut)}</div>`; }
+  else if(!r.actualOut){ action='SALIDA'; body=`<div class="gps ok"><b>🏁</b></div><div class="gpstxt">Ya es tu hora de salida</div><div class="note" style="margin-top:6px">Entraste a las ${hm(r.actualIn)}</div>`; }
+  else { body=`<div class="gps ok"><b>✓</b></div><div class="gpstxt" style="color:var(--green)">Jornada completa</div><div class="note" style="margin-top:6px">${hm(r.actualIn)} → ${hm(r.actualOut)}</div>`; }
   return `<section class="card mark">
-    <span class="badge" style="margin-bottom:12px">VISTA PREVIA · FASE 2</span>
-    <div class="k">Hora oficial (servidor · Lima)</div>
-    <div class="clock num" id="mk-clock">${new Date().toLocaleTimeString('es-PE',{timeZone:'America/Lima',hour12:false})}</div>
-    <div class="k" style="margin-top:2px">Turno hoy ${hm(r.scheduledIn)} – ${hm(r.scheduledOut)} · ${r.mode==='CASA'?'Casa':'Oficina'}</div>
-    <div class="gpsbox">${ring}</div>
-    ${inS?`<div class="times" style="margin:0 0 4px"><div>Entrada<b class="num">${hm(inS)}${r.lateMinutes?` <span style="color:var(--amber);font-size:12px">+${r.lateMinutes} min</span>`:' <span style="color:var(--green);font-size:12px">puntual</span>'}</b></div><div>Salida<b class="num">${outS?hm(outS):'—'}</b></div></div>`:''}
-    ${btn}
-    <p class="note" style="text-align:center;margin-bottom:0">Así se vería marcar dentro de la app. Hoy, en la app real, el botón abre tu módulo de asistencia actual.</p>
+    <div class="k">Hora oficial · Lima</div>
+    <div class="clock num" id="mk-clock">${limaClock()}</div>
+    <div class="k" style="margin-top:2px">Turno ${hm(r.scheduledIn)} – ${hm(r.scheduledOut)} · ${r.mode==='CASA'?'Casa':'Oficina'}</div>
+    <div class="gpsbox">${body}</div>
+    ${markState.err?`<div class="msg err" style="text-align:left;margin:0 0 12px">${esc(markState.err)}</div>`:''}
+    ${action&&!markState.busy?`<button class="btn" onclick="doMark('${action}')">Marcar ${action}</button>`:''}
+    ${DEMO&&r.actualIn&&!r.actualOut&&!exitOpen?`<button class="btn ghost" style="height:40px;font-size:13px" onclick="serverOffset+=(toMin(r_out='${r.scheduledOut}')-limaMinutes())*60000+5000;renderAttView()">(demo) adelantar a la hora de salida</button>`:''}
   </section>`;
 }
-function demoDoMark(kind){
-  if(kind==='out'){ demoMark.out=hm(ATT[($('date').value||todayKey()).slice(0,7)].todayRows[0].scheduledOut)+':05'; loadAtt(); return; }
-  demoMark.gps='searching'; renderAttView();
-  setTimeout(()=>{ demoMark.gps='ok'; renderAttView();
-    setTimeout(()=>{ const r=ATT[($('date').value||todayKey()).slice(0,7)].todayRows[0]; const [h,m]=r.scheduledIn.split(':').map(Number); const x=h*60+m+4;
-      demoMark.in=String(Math.floor(x/60)).padStart(2,'0')+':'+String(x%60).padStart(2,'0')+':12'; loadAtt(); toast('✓ Entrada registrada '+demoMark.in+' · hora del servidor'); },900); },1600);
+function doMark(action){
+  if(markState.busy) return;
+  markState={busy:true,msg:'Buscando señal GPS…',err:''}; renderAttView();
+  const fail=m=>{ markState={busy:false,msg:'',err:m}; renderAttView(); };
+  if(DEMO){ setTimeout(()=>{ markState.msg='Dentro de la oficina · a 8 m'; renderAttView(); setTimeout(()=>{ const t=limaClock(); if(action==='ENTRADA') demoMark.in=t; else demoMark.out=t; markState={busy:false,msg:'',err:''}; toast('✓ '+(action==='ENTRADA'?'Entrada':'Salida')+' registrada '+t); loadAtt(); },900); },1400); return; }
+  if(!navigator.geolocation) return fail('Este celular no permite usar el GPS en el navegador.');
+  navigator.geolocation.getCurrentPosition(async pos=>{
+    markState.msg='Registrando '+action.toLowerCase()+'…'; renderAttView();
+    try{ const r=await api('mark',{token,payload:{action,lat:pos.coords.latitude,lng:pos.coords.longitude,accuracy:pos.coords.accuracy,deviceId:deviceId(),userAgent:navigator.userAgent}});
+      markState={busy:false,msg:'',err:''}; toast('✓ '+r.message+' '+(r.time||'')); try{navigator.vibrate&&navigator.vibrate(80);}catch(e){} loadAtt();
+    }catch(e){ fail(e.message); }
+  }, err=>fail(err.code===1?'Debes permitir la ubicación. Revisa los permisos del navegador para esta app.':'No se pudo obtener tu ubicación. Activa el GPS, sal a un lugar con mejor señal e intenta otra vez.'),
+  {enableHighAccuracy:true,timeout:20000,maximumAge:0});
 }
+setInterval(()=>{ const c=document.getElementById('mk-clock'); if(c) c.textContent=limaClock(); },1000);
+setInterval(()=>{ if(view==='att'&&!markState.busy&&document.getElementById('mk-clock')) renderAttView(); },30000);
 function toast(t){ const el=document.createElement('div'); el.className='toast'; el.textContent=t; document.body.appendChild(el); setTimeout(()=>el.remove(),3200); }
-setInterval(()=>{ const c=document.getElementById('mk-clock'); if(c) c.textContent=new Date().toLocaleTimeString('es-PE',{timeZone:'America/Lima',hour12:false}); },1000);
 const attPill = s => { const c=ATT_COLORS[s]||'#999'; return `<span class="st" style="background:${c}22;color:${c};border:1px solid ${c}55">${esc(s)}</span>`; };
 const hm = t => t?String(t).slice(0,5):'—';
 function viewAtt(a){
@@ -580,7 +643,7 @@ function viewAtt(a){
       <article class="card stat"><div class="k">Marcaron</div><div class="v num" style="color:var(--green)">${int(t.checkedToday)}</div></article>
       <article class="card stat"><div class="k">Tardanzas</div><div class="v num" style="color:var(--amber)">${int(t.lateToday)}</div></article>
       <article class="card stat"><div class="k">Faltas / sin salida</div><div class="v num" style="color:var(--red)">${int(t.missingToday)}</div></article></div>`:''}
-    ${(!admin&&DEMO)?markCard(today[0]):''}
+    ${!admin?markCard(today[0],a):''}
     <div class="sec"><h2>${admin?'Equipo hoy':'Mi jornada de hoy'}</h2><span>${dayHuman(a.today)}</span></div>
     <div class="rank">${today.length?today.map(empCard).join(''):'<div class="card empty">Hoy no hay turnos programados.</div>'}</div>
     <div class="sec"><h2>Semana actual</h2><span>Desde el lunes</span></div>
@@ -590,7 +653,7 @@ function viewAtt(a){
       <div class="l"><span>Descuento faltas</span><b class="num">${money(t.absenceDiscountWeek)}</b></div>
       <div class="l total"><span>Total descuentos</span><b class="num" style="color:${t.totalDiscountWeek?'var(--red)':'var(--green)'}">${money(t.totalDiscountWeek)}</b></div>
     </section>
-    <div style="margin-top:14px">${mark}</div>
+    ${a.canMarkInApp?'':`<div style="margin-top:14px">${mark}</div>`}
     <p class="note">Tolerancia: ${a.toleranceWeekly} min acumulados por semana (lunes a sábado). Superada la tolerancia: ${money(a.discountPerLateDay)} por cada día con tardanza. Hora oficial: servidor (Lima).</p>`;
   }
   const mt=a.monthlyTotals||{}, emps=Object.keys(mt);
@@ -859,10 +922,10 @@ document.querySelectorAll('#seg button').forEach(b=>b.addEventListener('click',(
 $('date').addEventListener('change',()=>{ if(view==='att'&&!attOnly) loadAtt(); if(view==='cob'&&!attOnly) loadCob(); load(); });
 $('refresh').addEventListener('click',load);
 $('send').addEventListener('click',sendCode); $('verify').addEventListener('click',verifyCode);
-$('email').addEventListener('keydown',e=>{if(e.key==='Enter')sendCode();});
+$('email2').addEventListener('keydown',e=>{if(e.key==='Enter')sendCode();});
 $('code').addEventListener('input',e=>{e.target.value=e.target.value.replace(/\D/g,'').slice(0,6); if(e.target.value.length===6) verifyCode();});
-$('back').addEventListener('click',showLogin);
-$('menu').addEventListener('click',()=>{$('demo-roles').classList.toggle('hidden',!DEMO); $('demo-sale').classList.toggle('hidden',DEMO_ROLE==='COBRANZAS');$('sheet').classList.remove('hidden');$('sheet-bg').classList.remove('hidden');});
+$('back').addEventListener('click',showCodeStep);
+$('menu').addEventListener('click',()=>{$('admin-reset').classList.toggle('hidden',curRole()!=='ADMIN');$('demo-roles').classList.toggle('hidden',!DEMO); $('demo-sale').classList.toggle('hidden',DEMO_ROLE==='COBRANZAS');$('sheet').classList.remove('hidden');$('sheet-bg').classList.remove('hidden');});
 function setDemoRole(r){ DEMO_ROLE=r; DEMO_BOOST=0; store.set('DTAPP_DEMO_ROLE',r); demoMark={gps:'idle',in:'',out:''}; DATA=null; ATT={}; closeSheet(); period='d'; $('seg').classList.remove('m'); document.querySelectorAll('#seg button').forEach(x=>x.classList.toggle('on',x.dataset.p==='d'));
   if(r==='COBRANZAS'){ userName='Yossy'; view='cob'; showOnlyAttendance({name:'Yossy'}); return; }
   attOnly=false; userName=r==='ASESOR'?'Lesly':'Administrador'; view=r==='ASESOR'?'att':'home'; showApp(); renderSkeleton(); load(); }
@@ -876,7 +939,9 @@ if('serviceWorker' in navigator && location.protocol==='https:') navigator.servi
 function demoApi(action, p){
   return new Promise((res,rej)=>setTimeout(()=>{
     if(action==='requestCode') return res({success:true,message:'Modo demo: escribe cualquier código de 6 dígitos.'});
-    if(action==='verifyCode') return res({success:true,token:'demo',role:'ADMIN',advisor:'ADMIN',name:'Administrador'});
+    if(action==='verifyCode') return res({success:true,token:'demo',role:DEMO_ROLE,advisor:DEMO_ROLE==='ASESOR'?'LESLY':DEMO_ROLE,name:userName||'Demo',hasPassword:false});
+    if(action==='loginPassword'||action==='setPassword') return res({success:true,token:'demo',role:DEMO_ROLE,advisor:DEMO_ROLE==='ASESOR'?'LESLY':DEMO_ROLE,name:userName||'Demo',message:'ok'});
+    if(action==='adminResetPassword') return res({success:true,message:'Contraseña reseteada (demo).'});
     if(action==='logout') return res({success:true});
     if(action==='getAttendance') return res(demoAttendance(p.month||todayKey().slice(0,7)));
     if(action==='getCollections') return DEMO_ROLE==='ASESOR'?rej(new Error('Cobranzas está disponible solo para ADMIN y COBRANZAS.')):res(demoCollections((p.filters&&p.filters.date)||todayKey()));
@@ -968,7 +1033,7 @@ function demoAttendance(month){
       if(k>=ws){const W=wt[e];W.late+=late;W.discount+=ld;W.absenceDiscount+=ad;W.totalDiscount+=ld+ad;}
       if(k===today) todayRows.push(it);}});
   const sum=(o,f)=>Object.values(o).reduce((s,x)=>s+x[f],0);
-  return {success:true,isAdmin:!ME,employee:ME||'ADMIN',month,today,serverTimestamp:Date.now(),rows,todayRows,weeklyTotals:wt,monthlyTotals:mt,toleranceWeekly:15,discountPerLateDay:5,attendanceUrl:'#',
+  return {success:true,isAdmin:!ME,canMarkInApp:!!ME,employee:ME||'ADMIN',month,today,serverTimestamp:Date.now(),rows,todayRows,weeklyTotals:wt,monthlyTotals:mt,toleranceWeekly:15,discountPerLateDay:5,attendanceUrl:'#',
     totals:{scheduledToday:todayRows.length,checkedToday:todayRows.filter(x=>x.actualIn).length,lateToday:todayRows.filter(x=>x.lateMinutes>0).length,missingToday:todayRows.filter(x=>/FALTA/.test(x.status)).length,
       lateMinutesWeek:sum(wt,'late'),discountWeek:sum(wt,'discount'),absenceDiscountWeek:sum(wt,'absenceDiscount'),totalDiscountWeek:sum(wt,'totalDiscount'),
       discountMonth:sum(mt,'discount'),absenceDiscountMonth:sum(mt,'absenceDiscount'),totalDiscountMonth:sum(mt,'totalDiscount'),pendingAbsencesMonth:sum(mt,'pendingAbsences'),justifiedAbsencesMonth:sum(mt,'justifiedAbsences'),unexcusedAbsencesMonth:sum(mt,'unexcusedAbsences')}};
