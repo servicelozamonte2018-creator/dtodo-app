@@ -224,6 +224,11 @@ details.day[open] summary:after{transform:rotate(90deg)}
 .axis{display:flex;justify-content:space-between;font-size:10px;color:var(--dim);margin-top:6px}
 .help{font-size:12.5px;color:#CDBEDF;line-height:1.6;margin:0;padding-left:18px}.help b{color:#fff}
 @media(min-width:700px){.tiles{grid-template-columns:repeat(3,1fr)}}
+.prow{display:grid;grid-template-columns:1fr 92px 104px;gap:8px;align-items:center;padding:11px 0;border-bottom:1px solid var(--line);font-size:13.5px}
+.prow:last-child{border:0}.prow .pn{font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.prow span.num{text-align:right}.prow b{display:block;font-size:14px}.prow small{display:block;color:var(--muted);font-size:11.5px}
+.prow.head{font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;padding:10px 0 8px}.prow.head span:not(:first-child){text-align:right}
+.prow.total{border-top:2px solid rgba(255,192,92,.5);border-bottom:0;margin-top:2px}.prow.total .pn{color:var(--amber);font-weight:800}.prow.total b{color:var(--amber)}.prow.total small{color:var(--text);font-weight:700}
 @keyframes spin{to{transform:rotate(360deg)}}
 @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(61,245,166,.6)}70%{box-shadow:0 0 0 8px rgba(61,245,166,0)}100%{box-shadow:0 0 0 0 rgba(61,245,166,0)}}
 @keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
@@ -845,7 +850,8 @@ function viewFin(d){
   if(p.uncostedLines>0) reasons.push('Faltan costos en '+p.uncostedLines+' línea(s): '+(p.uncostedNames||[]).map(u=>u.name).join(', ')+'.');
   const ads=p.adsAvailable?p.ads:0;
   const mx=Math.max(1,p.sales);
-  const prods=(f.products||[]).map(x=>({name:x.name,u:period==='d'?x.dailyUnits:x.monthlyUnits,c:period==='d'?x.dailyCost:x.monthlyCost})).filter(x=>x.u>0).sort((a,b)=>b.c-a.c);
+  const prods=(f.products||[]).filter(x=>x.dailyUnits>0||x.monthlyUnits>0).sort((a,b)=>period==='d'?(b.dailyCost-a.dailyCost||b.monthlyCost-a.monthlyCost):(b.monthlyCost-a.monthlyCost));
+  const uncD=f.daily.uncostedUnits||0, uncM=f.monthly.uncostedUnits||0;
   return `
   <section class="card net ${neg?'bad':'good'}" style="margin-top:14px">
     <div class="k">${neg?'Pérdida':'Ganancia'} estimada · ${esc(periodLbl(d))}</div>
@@ -861,8 +867,17 @@ function viewFin(d){
     ${wf('Resultado',p.net,mx,neg?'#FF5C7A':'#3DF5A6',false)}
   </section>
   ${reasons.length?`<p class="note" style="color:var(--amber)">⚠ ${esc(reasons.join(' '))}</p>`:''}
-  <div class="sec"><h2>Costo por producto</h2><span>${int(p.units)} unidades</span></div>
-  <section class="card">${prods.length?prods.map(x=>`<div class="prod"><div>${esc(x.name)}<small>${int(x.u)} unid.</small></div><b class="num">${money(x.c)}</b></div>`).join(''):'<div class="empty">Sin productos identificados en el período.</div>'}</section>
+  <div class="sec"><h2>Mercadería comprada</h2><span>Unidades y costo</span></div>
+  <div class="stats" style="margin-top:0;grid-template-columns:1fr 1fr">
+    <article class="card stat" style="${period==='d'?'border-color:rgba(255,192,92,.5)':''}"><div class="k">📅 ${d.date===todayKey()?'Hoy':esc(dayHuman(d.date))}</div><div class="v num" style="color:var(--amber)">${int(f.daily.units)} <span style="font-size:14px;color:var(--muted)">unid.</span></div><div class="num" style="font-weight:800;font-size:17px;margin-top:4px">${money(f.daily.merchandise)}</div></article>
+    <article class="card stat" style="${period==='m'?'border-color:rgba(255,192,92,.5)':''}"><div class="k">🗓 ${esc(monthHuman(d.month))}</div><div class="v num" style="color:var(--amber)">${int(f.monthly.units)} <span style="font-size:14px;color:var(--muted)">unid.</span></div><div class="num" style="font-weight:800;font-size:17px;margin-top:4px">${money(f.monthly.merchandise)}</div></article>
+  </div>
+  <section class="card" style="margin-top:10px;padding:6px 16px">
+    <div class="prow head"><span>Producto</span><span>Día</span><span>Mes</span></div>
+    ${prods.length?prods.map(x=>`<div class="prow"><span class="pn">${esc(x.name)}</span><span class="num">${x.dailyUnits?`<b>${int(x.dailyUnits)} u</b><small>${money(x.dailyCost)}</small>`:'<small>—</small>'}</span><span class="num"><b>${int(x.monthlyUnits)} u</b><small>${money(x.monthlyCost)}</small></span></div>`).join(''):'<div class="empty">Sin productos identificados.</div>'}
+    <div class="prow total"><span class="pn">TOTAL</span><span class="num"><b>${int(f.daily.units)} u</b><small>${money(f.daily.merchandise)}</small></span><span class="num"><b>${int(f.monthly.units)} u</b><small>${money(f.monthly.merchandise)}</small></span></div>
+  </section>
+  ${uncD||uncM?`<p class="note" style="color:var(--amber)">⚠ El total incluye ${uncD?int(uncD)+' unid. del día':''}${uncD&&uncM?' y ':''}${uncM?int(uncM)+' unid. del mes':''} sin costo registrado en COSTOS_PRODUCTOS (no suman al monto).</p>`:''}
   ${metaBlock(d.meta)}
   <p class="note">Gasto fijo: ${money(f.fixedDaily)} por cada lunes a viernes; sábado y domingo S/ 0.${period==='m'?' Días hábiles contados: '+f.monthlyFixedWorkdays+'.':''} ${f.adsLastSync?'Última sincronización Meta: '+esc(f.adsLastSync)+'.':''} ${esc(f.adsMessage||'')}</p>`;
 }
