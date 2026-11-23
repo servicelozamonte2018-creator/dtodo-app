@@ -1,6 +1,6 @@
 // Guarda solo la "carcasa" de la app para que abra rápido.
 // Los datos SIEMPRE se piden en vivo al API (nunca se guardan aquí).
-const CACHE = 'dtodo-app-v5';
+const CACHE = 'dtodo-app-v7';
 const SHELL = ['./', './index.html', './config.js', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png', './favicon.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL))); self.skipWaiting(); });
 self.addEventListener('activate', e => {

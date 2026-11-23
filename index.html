@@ -314,7 +314,7 @@ details.day[open] summary:after{transform:rotate(90deg)}
   <div id="admin-reset" class="hidden"><div class="label">ADMIN · resetear contraseña de alguien</div>
     <div style="display:flex;gap:8px"><input id="reset-email" class="input" style="height:48px;font-size:15px" type="email" placeholder="correo@gmail.com"><button class="btn ghost" style="margin:0;width:auto;padding:0 16px;height:48px" onclick="adminReset()">Resetear</button></div></div>
   <button class="btn ghost" id="logout">Cerrar sesión</button>
-  <p class="note" style="text-align:center">Versión 1.4 · Los datos vienen en vivo de la hoja maestra</p>
+  <p class="note" style="text-align:center">Versión 1.5 · Los datos vienen en vivo de la hoja maestra</p>
 </div>
 
 <script>
@@ -330,7 +330,7 @@ const store = {
 let token = store.get(TOKEN_KEY) || (DEMO ? 'demo' : '');
 let DATA = null, period = 'd', view = 'home', busy = false, lastEmail = '';
 let DEMO_ROLE = (new URLSearchParams(location.search).get('rol')||store.get('DTAPP_DEMO_ROLE')||'ADMIN').toUpperCase();
-let demoMark = {gps:'idle', in:'', out:''}, DEMO_BOOST = 0;
+let demoMark = {gps:'idle', in:'', out:''}, DEMO_BOOST = 0, DEMO_ABS = {};
 let COB = {}, cobBusy = false;
 let ATT = {}, attBusy = false, attOnly = store.get('DTAPP_ROLE') === 'COBRANZAS', userName = store.get('DTAPP_NAME');
 const ATT_COLORS = {'PUNTUAL':'#3DF5A6','TARDANZA':'#FFC05C','EN JORNADA':'#38E1FF','FALTA SALIDA':'#FF9E3D','FALTA POR REVISAR':'#B98BFF','FALTA JUSTIFICADA':'#FFC05C','FALTA INJUSTIFICADA':'#FF5C7A','PENDIENTE':'#6E6080'};
@@ -626,6 +626,34 @@ function doMark(action){
 setInterval(()=>{ const c=document.getElementById('mk-clock'); if(c) c.textContent=limaClock(); },1000);
 setInterval(()=>{ if(view==='att'&&!markState.busy&&document.getElementById('mk-clock')) renderAttView(); },30000);
 function toast(t){ const el=document.createElement('div'); el.className='toast'; el.textContent=t; document.body.appendChild(el); setTimeout(()=>el.remove(),3200); }
+let absSel={key:'',decision:''}, absBusy='';
+function goAbsences(){ period='m'; $('seg').classList.add('m'); document.querySelectorAll('#seg button').forEach(x=>x.classList.toggle('on',x.dataset.p==='m')); renderAttView(); setTimeout(()=>{const el=$('faltas'); if(el) el.scrollIntoView({behavior:'smooth',block:'start'});},150); }
+function absPick(key,dec){ absSel={key,decision:dec}; renderAttView(); }
+function absCancel(){ absSel={key:'',decision:''}; renderAttView(); }
+async function absConfirm(emp,date,dec){
+  const key=emp+'|'+date, obs=(document.getElementById('obs-'+key.replace(/[^A-Za-z0-9]/g,''))||{}).value||'';
+  absBusy=key; renderAttView();
+  try{ const r=await api('reviewAbsence',{token,employee:emp,date,decision:dec,observation:obs}); toast('✓ '+emp+' · falta '+dec.toLowerCase()+' · '+money(r.discount)); absSel={key:'',decision:''}; absBusy=''; loadAtt(); }
+  catch(e){ absBusy=''; renderAttView(); toast('⚠ '+e.message); }
+}
+function absencesBlock(rows){
+  const list=rows.filter(r=>r.absenceStatus).sort((a,b)=>(a.absenceStatus==='PENDIENTE'?0:1)-(b.absenceStatus==='PENDIENTE'?0:1)||(a.date<b.date?1:-1));
+  const pend=list.filter(r=>r.absenceStatus==='PENDIENTE').length;
+  return `<div class="sec" id="faltas"><h2>Faltas del mes</h2><span>${pend?pend+' por revisar':'Todas revisadas ✓'}</span></div>
+  <div class="rank">${list.length?list.map(r=>{
+    const key=r.employee+'|'+r.date, id=key.replace(/[^A-Za-z0-9]/g,''), sel=absSel.key===key, busy=absBusy===key, isP=r.absenceStatus==='PENDIENTE';
+    const btn=(dec,lbl,amt,col)=> sel&&absSel.decision===dec
+      ? `<button class="btn" style="margin:0;height:46px;background:${col}" onclick="absConfirm('${r.employee}','${r.date}','${dec}')">${busy?'Guardando…':'Confirmar '+money(amt)}</button>`
+      : `<button class="btn ghost" style="margin:0;height:46px;border-color:${col}66;color:${col}" onclick="absPick('${key}','${dec}')">${lbl}<br><small style="font-size:11px;opacity:.85">${money(amt)}</small></button>`;
+    return `<article class="card adv">
+      <div class="h"><div class="nm">${esc(r.employee)}<div class="note" style="margin:2px 0 0;font-weight:500">${dayHuman(r.date)} · turno ${hm(r.scheduledIn)}–${hm(r.scheduledOut)}</div></div>${attPill(r.status)}</div>
+      ${isP||sel?`<input id="obs-${id}" class="input" style="height:44px;font-size:14px;margin-top:12px" placeholder="Observación (opcional)">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">${btn('JUSTIFICADA','✅ Justificada',r.absenceJustifiedAmount,'#FFC05C')}${btn('INJUSTIFICADA','❌ Injustificada',r.absenceUnjustifiedAmount,'#FF5C7A')}</div>
+        ${sel?`<button class="link" style="margin-top:8px" onclick="absCancel()">Cancelar</button>`:''}`
+      :`<div class="meta" style="margin-top:8px"><span>Descuento <b style="color:var(--red)">${money(r.absenceDiscount)}</b></span><button class="link" style="width:auto;margin:0;display:inline" onclick="absPick('${key}','')">Cambiar</button></div>`}
+    </article>`;}).join(''):'<div class="card empty">🎉 Sin faltas este mes.</div>'}</div>
+  <p class="note">Justificada = tarifa base del trabajador (ASISTENCIA_CONFIG). Injustificada = el doble. Solo se puede clasificar después de terminado su turno y si no marcó entrada.</p>`;
+}
 const attPill = s => { const c=ATT_COLORS[s]||'#999'; return `<span class="st" style="background:${c}22;color:${c};border:1px solid ${c}55">${esc(s)}</span>`; };
 const hm = t => t?String(t).slice(0,5):'—';
 function viewAtt(a){
@@ -638,7 +666,8 @@ function viewAtt(a){
       <div class="times"><div>Entrada · prog. ${hm(r.scheduledIn)}<b class="num">${r.actualIn?hm(r.actualIn):'—'}${r.lateMinutes?` <span style="color:var(--amber);font-size:12px">+${r.lateMinutes} min</span>`:''}</b></div><div>Salida · prog. ${hm(r.scheduledOut)}<b class="num">${r.actualOut?hm(r.actualOut):'—'}</b></div></div>
       <div class="bar" style="margin:12px 0 4px"><div data-w="${used/15*100}%" style="${w.late>15?'background:linear-gradient(90deg,#FFC05C,#FF5C7A)':''}"></div></div>
       <div class="tol"><span>Tolerancia semanal ${int(w.late)}/15 min</span><span>Desc. semana <b style="color:${w.totalDiscount?'var(--red)':'var(--text)'}">${money(w.totalDiscount)}</b></span></div></article>`; };
-    return `${admin?`<div class="stats">
+    return `${admin&&t.pendingAbsencesMonth?`<section class="card" style="margin-top:14px;border-color:rgba(185,139,255,.45);background:rgba(185,139,255,.1)"><div style="display:flex;align-items:center;gap:12px"><div style="font-size:30px">⚠️</div><div style="flex:1"><b>${int(t.pendingAbsencesMonth)} falta(s) por revisar</b><div class="note" style="margin:2px 0 0">Decide si son justificadas o injustificadas.</div></div></div><button class="btn" style="height:46px" onclick="goAbsences()">Revisar ahora</button></section>`:''}
+    ${admin?`<div class="stats">
       <article class="card stat"><div class="k">Programados</div><div class="v num">${int(t.scheduledToday)}</div></article>
       <article class="card stat"><div class="k">Marcaron</div><div class="v num" style="color:var(--green)">${int(t.checkedToday)}</div></article>
       <article class="card stat"><div class="k">Tardanzas</div><div class="v num" style="color:var(--amber)">${int(t.lateToday)}</div></article>
@@ -672,7 +701,7 @@ function viewAtt(a){
     <div class="sec"><h2>${admin?'Por trabajador':'Mi resumen'}</h2><span>${esc(monthHuman(a.month))}</span></div>
     <div class="rank">${emps.length?emps.map(e=>{const m=mt[e];return `<article class="card adv"><div class="h"><div class="nm">${esc(e)}</div><div class="sl num" style="color:${m.totalDiscount?'var(--red)':'var(--green)'}">${money(m.totalDiscount)}</div></div>
       <div class="meta" style="margin-top:10px"><span>Tardanza <b>${int(m.late)} min</b></span><span>Días con desc. <b>${int(m.days)}</b> · <b>${money(m.discount)}</b></span><span>Faltas <b>${int(m.absences)}</b> (J ${int(m.justifiedAbsences)} · I ${int(m.unexcusedAbsences)} · P ${int(m.pendingAbsences)})</span><span>Desc. faltas <b>${money(m.absenceDiscount)}</b></span>${admin?`<span>Después de salida <b>${int(m.after)} min</b></span>`:''}</div></article>`;}).join(''):'<div class="card empty">Sin registros en este mes.</div>'}</div>
-    ${admin&&pending.length?`<div class="sec"><h2>Faltas por revisar</h2><span>${pending.length}</span></div><section class="card">${pending.map(r=>`<div class="prod"><div>${esc(r.employee)}<small>${dayHuman(r.date)} · J ${money(r.absenceJustifiedAmount)} / I ${money(r.absenceUnjustifiedAmount)}</small></div>${attPill(r.status)}</div>`).join('')}</section><p class="note">La clasificación JUSTIFICADA / INJUSTIFICADA se hace en el módulo de asistencia actual (menú ⋮).</p>`:''}
+    ${admin?absencesBlock(rows):''}
     <div class="sec"><h2>Historial diario</h2><span>${rows.length} registros</span></div>
     <section class="card">${dates.length?dates.map((dk,i)=>`<details class="day"${i===0?' open':''}><summary><span>${dayHuman(dk)}</span><span style="display:flex;gap:6px">${byDate[dk].some(r=>r.totalDiscount)?`<b style="color:var(--red);font-size:13px">${money(byDate[dk].reduce((s,r)=>s+r.totalDiscount,0))}</b>`:''}</span></summary>${byDate[dk].map(r=>`<div class="dayrow"><div><b>${esc(r.employee)}</b> <small>· ${hm(r.actualIn)} → ${hm(r.actualOut)} (prog. ${hm(r.scheduledIn)}–${hm(r.scheduledOut)})${r.lateMinutes?' · +'+r.lateMinutes+' min':''}</small></div>${attPill(r.status)}${r.totalDiscount?`<small style="grid-column:1/-1;color:var(--red)">Descuento ${money(r.totalDiscount)}</small>`:''}</div>`).join('')}</details>`).join(''):'<div class="empty">Sin registros en este mes.</div>'}</section>
     <div style="margin-top:14px">${mark}</div>`;
@@ -925,7 +954,7 @@ $('send').addEventListener('click',sendCode); $('verify').addEventListener('clic
 $('email2').addEventListener('keydown',e=>{if(e.key==='Enter')sendCode();});
 $('code').addEventListener('input',e=>{e.target.value=e.target.value.replace(/\D/g,'').slice(0,6); if(e.target.value.length===6) verifyCode();});
 $('back').addEventListener('click',showCodeStep);
-$('menu').addEventListener('click',()=>{$('admin-reset').classList.toggle('hidden',curRole()!=='ADMIN');$('demo-roles').classList.toggle('hidden',!DEMO); $('demo-sale').classList.toggle('hidden',DEMO_ROLE==='COBRANZAS');$('sheet').classList.remove('hidden');$('sheet-bg').classList.remove('hidden');});
+$('menu').addEventListener('click',()=>{$('admin-reset').classList.toggle('hidden',curRole()!=='ADMIN');$('att-link').classList.toggle('hidden',curRole()!=='ADMIN');$('demo-roles').classList.toggle('hidden',!DEMO); $('demo-sale').classList.toggle('hidden',DEMO_ROLE==='COBRANZAS');$('sheet').classList.remove('hidden');$('sheet-bg').classList.remove('hidden');});
 function setDemoRole(r){ DEMO_ROLE=r; DEMO_BOOST=0; store.set('DTAPP_DEMO_ROLE',r); demoMark={gps:'idle',in:'',out:''}; DATA=null; ATT={}; closeSheet(); period='d'; $('seg').classList.remove('m'); document.querySelectorAll('#seg button').forEach(x=>x.classList.toggle('on',x.dataset.p==='d'));
   if(r==='COBRANZAS'){ userName='Yossy'; view='cob'; showOnlyAttendance({name:'Yossy'}); return; }
   attOnly=false; userName=r==='ASESOR'?'Lesly':'Administrador'; view=r==='ASESOR'?'att':'home'; showApp(); renderSkeleton(); load(); }
@@ -942,6 +971,7 @@ function demoApi(action, p){
     if(action==='verifyCode') return res({success:true,token:'demo',role:DEMO_ROLE,advisor:DEMO_ROLE==='ASESOR'?'LESLY':DEMO_ROLE,name:userName||'Demo',hasPassword:false});
     if(action==='loginPassword'||action==='setPassword') return res({success:true,token:'demo',role:DEMO_ROLE,advisor:DEMO_ROLE==='ASESOR'?'LESLY':DEMO_ROLE,name:userName||'Demo',message:'ok'});
     if(action==='adminResetPassword') return res({success:true,message:'Contraseña reseteada (demo).'});
+    if(action==='reviewAbsence'){ DEMO_ABS[p.employee+'|'+p.date]=p.decision; const rt={SERGIO:53,LESLY:45,PIERO:30,YOSSY:45,DANIELA:28,MILENE:26}[p.employee]||0; return res({success:true,discount:p.decision==='JUSTIFICADA'?rt:rt*2}); }
     if(action==='logout') return res({success:true});
     if(action==='getAttendance') return res(demoAttendance(p.month||todayKey().slice(0,7)));
     if(action==='getCollections') return DEMO_ROLE==='ASESOR'?rej(new Error('Cobranzas está disponible solo para ADMIN y COBRANZAS.')):res(demoCollections((p.filters&&p.filters.date)||todayKey()));
@@ -1022,14 +1052,14 @@ function demoAttendance(month){
     for(let d=20;d<=30;d++){const k=month+'-'+String(d).padStart(2,'0');if(k>today)break;const dow=new Date(k+'T12:00').getDay();if(dow===0)continue;
       const [si,so]=sched[e];const seed=(d*7+ei*13)%17;let late=seed<10?0:seed-6;let st,ai='',ao='',abs='',ad=0;
       const wk=(()=>{const x=new Date(k+'T12:00');x.setDate(x.getDate()-((x.getDay()+6)%7));return x.toISOString().slice(0,10);})();
-      if(seed===16&&k<today){abs=d%2?'INJUSTIFICADA':'PENDIENTE';st=abs==='INJUSTIFICADA'?'FALTA INJUSTIFICADA':'FALTA POR REVISAR';ad=abs==='INJUSTIFICADA'?rate[e]*2:0;late=0;}
+      if((seed===16||seed===3)&&k<today){abs=DEMO_ABS[e+'|'+k]||(seed===16&&d%2?'INJUSTIFICADA':'PENDIENTE');st=abs==='INJUSTIFICADA'?'FALTA INJUSTIFICADA':abs==='JUSTIFICADA'?'FALTA JUSTIFICADA':'FALTA POR REVISAR';ad=abs==='INJUSTIFICADA'?rate[e]*2:abs==='JUSTIFICADA'?rate[e]:0;late=0;}
       else{ai=add(si,late);const [sh,sm]=so.split(':').map(Number);if(k<today||nowMin>=sh*60+sm){ao=add(so,3);st=late?'TARDANZA':'PUNTUAL';}else if(k===today&&nowMin>=Number(si.slice(0,2))*60+Number(si.slice(3,5))){st='EN JORNADA';}else{ai='';late=0;st='PENDIENTE';}}
       if(ME&&k===today){ late=0; ai=''; ao=''; st='PENDIENTE';
         if(demoMark.in){ ai=demoMark.in; const [h,m]=demoMark.in.split(':').map(Number); late=Math.max(0,h*60+m-(Number(si.slice(0,2))*60+Number(si.slice(3,5)))); st='EN JORNADA'; }
         if(demoMark.out){ ao=demoMark.out; st=late?'TARDANZA':'PUNTUAL'; } }
       run[wk]=(run[wk]||0)+late;const ld=late>0&&run[wk]>15?5:0;
       const it={date:k,employee:e,scheduledIn:si+':00',scheduledOut:so+':00',actualIn:ai,actualOut:ao,lateMinutes:late,lateDiscount:ld,absenceStatus:abs,absenceDiscount:ad,absenceJustifiedAmount:rate[e],absenceUnjustifiedAmount:rate[e]*2,totalDiscount:ld+ad,status:st,mode:(e==='YOSSY'&&dow===6)?'CASA':'OFICINA'};
-      rows.push(it);const M=mt[e];M.late+=late;M.discount+=ld;M.absenceDiscount+=ad;M.totalDiscount+=ld+ad;M.days+=ld?1:0;M.absences+=abs?1:0;M.unexcusedAbsences+=abs==='INJUSTIFICADA'?1:0;M.pendingAbsences+=abs==='PENDIENTE'?1:0;
+      rows.push(it);const M=mt[e];M.late+=late;M.discount+=ld;M.absenceDiscount+=ad;M.totalDiscount+=ld+ad;M.days+=ld?1:0;M.absences+=abs?1:0;M.unexcusedAbsences+=abs==='INJUSTIFICADA'?1:0;M.justifiedAbsences+=abs==='JUSTIFICADA'?1:0;M.pendingAbsences+=abs==='PENDIENTE'?1:0;
       if(k>=ws){const W=wt[e];W.late+=late;W.discount+=ld;W.absenceDiscount+=ad;W.totalDiscount+=ld+ad;}
       if(k===today) todayRows.push(it);}});
   const sum=(o,f)=>Object.values(o).reduce((s,x)=>s+x[f],0);
