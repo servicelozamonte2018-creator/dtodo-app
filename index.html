@@ -213,7 +213,7 @@ details.day[open] summary:after{transform:rotate(90deg)}
 .cobhero .k{font-size:12px;letter-spacing:1px;text-transform:uppercase;color:#C9F5E1;font-weight:700}
 .cobhero .v{font-size:30px;font-weight:820;letter-spacing:-.8px;margin:6px 0 2px;color:var(--green)}
 .cobhero .s{font-size:13px;color:var(--muted);line-height:1.5}.cobhero .s b{color:var(--text)}
-.tiles{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.tiles{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}@media(min-width:700px){.tiles{grid-template-columns:repeat(4,1fr)!important}}
 .tile{padding:14px}.tile .e{font-size:22px}.tile .n{font-size:26px;font-weight:820;margin:4px 0 0;letter-spacing:-.5px}.tile .l{font-size:12px;font-weight:700;color:#D6C8E8}.tile .m{font-size:11px;color:var(--muted);margin-top:4px}
 .paybar{display:flex;height:14px;border-radius:14px;overflow:hidden;background:rgba(255,255,255,.06);margin:10px 0}
 .paybar div{height:100%;width:0;transition:width .9s cubic-bezier(.2,.8,.2,1)}
@@ -515,12 +515,13 @@ function viewCob(c){
   <div class="sec"><h2>¿Cómo están los pedidos?</h2><span>${int(x.orders)} en total</span></div>
   <div class="tiles">
     ${tile('📦','Total de pedidos',x.orders,int(x.validOrders)+' válidos')}
-    ${tile('📥','Por enviar',x.toShip.count,'Recibidos + confirmados'+(x.toShip.balance?' · por cobrar '+money(x.toShip.balance):''),'#B98BFF')}
-    ${tile('🚚','Enviados',bs['ENVIADO'].count,bs['ENVIADO'].balance?'Por cobrar '+money(bs['ENVIADO'].balance):'Sin saldo pendiente','#38E1FF')}
-    ${tile('🏬','En recojo',bs['POR RECOJO'].count,bs['POR RECOJO'].balance?'Por cobrar '+money(bs['POR RECOJO'].balance):'Sin saldo pendiente','#FF9E3D')}
     ${tile('✅','Cobrados al 100%',x.fullyPaid,'Pagaron todo','#3DF5A6')}
-    ${tile('❌','Cancelados',bs['CANCELADO'].count,fmt(x.cancelRate,1)+'% del total','#FF5C7A')}
-    ${bs['OBSERVACIÓN'].count?tile('⚠️','En observación',bs['OBSERVACIÓN'].count,bs['OBSERVACIÓN'].balance?'Por cobrar '+money(bs['OBSERVACIÓN'].balance):'','#FFC05C'):''}
+    ${tile('📥','Pedido recibido',bs['PEDIDO RECIBIDO'].count,bs['PEDIDO RECIBIDO'].balance?'Por cobrar '+money(bs['PEDIDO RECIBIDO'].balance):'Sin saldo pendiente','#FFC05C')}
+    ${tile('👍','Confirmado',bs['CONFIRMADO'].count,bs['CONFIRMADO'].balance?'Por cobrar '+money(bs['CONFIRMADO'].balance):'Sin saldo pendiente','#3DF5A6')}
+    ${tile('🚚','Enviado',bs['ENVIADO'].count,bs['ENVIADO'].balance?'Por cobrar '+money(bs['ENVIADO'].balance):'Sin saldo pendiente','#38E1FF')}
+    ${tile('🏬','Por recojo',bs['POR RECOJO'].count,bs['POR RECOJO'].balance?'Por cobrar '+money(bs['POR RECOJO'].balance):'Sin saldo pendiente','#FF9E3D')}
+    ${tile('❌','Cancelado',bs['CANCELADO'].count,fmt(x.cancelRate,1)+'% del total','#FF5C7A')}
+    ${tile('⚠️','Observación',bs['OBSERVACIÓN'].count,bs['OBSERVACIÓN'].balance?'Por cobrar '+money(bs['OBSERVACIÓN'].balance):'Sin saldo pendiente','#B98BFF')}
   </div>
 
   <div class="sec"><h2>¿Cuánto han pagado?</h2><span>Pedidos válidos</span></div>
@@ -569,7 +570,7 @@ function viewCob(c){
   <section class="card"><ul class="help">
     <li><b>Cobrado</b>: lo que ya pagaron los pedidos no cancelados (primer pago + pago restante − devoluciones).</li>
     <li><b>Falta cobrar</b>: total del pedido menos lo pagado.</li>
-    <li><b>Por enviar</b>: pedidos en estado <i>Pedido recibido</i> o <i>Confirmado</i>.</li>
+    <li>Los estados son <b>los mismos de tu hoja PEDIDOS</b> (columna ESTADO), igual que el panel.</li>
     <li><b>Tasa de cobro</b>: cobrado ÷ vendido.</li>
     <li>Se agrupa por <b>fecha del pedido</b>, porque la hoja no guarda la fecha del pago.</li>
   </ul></section>`;
